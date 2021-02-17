@@ -2,10 +2,15 @@ package net.dahanne.mavenresolver;
 
 import org.apache.maven.artifact.repository.ArtifactRepository;
 import org.apache.maven.artifact.repository.MavenArtifactRepository;
+import org.apache.maven.artifact.repository.ArtifactRepositoryPolicy;
 import org.apache.maven.artifact.repository.layout.DefaultRepositoryLayout;
+import org.apache.maven.model.building.ModelBuildingException;
+import org.apache.maven.model.building.ModelProblem;
 import org.apache.maven.project.DefaultProjectBuildingRequest;
 import org.apache.maven.project.MavenProject;
 import org.apache.maven.project.ProjectBuilder;
+import org.apache.maven.project.ProjectBuildingException;
+import org.apache.maven.project.ProjectBuildingRequest;
 import org.apache.maven.project.ProjectBuildingResult;
 import org.apache.maven.repository.internal.MavenRepositorySystemUtils;
 import org.codehaus.plexus.ContainerConfiguration;
@@ -45,24 +50,35 @@ public class MavenResolverApplication {
     LocalRepository localRepository = new LocalRepository("target/.m2");
     session.setLocalRepositoryManager(repositorySystem.newLocalRepositoryManager(session, localRepository));
 
-    DefaultProjectBuildingRequest request = new DefaultProjectBuildingRequest();
-    request.setRepositorySession(session);
-    request.setResolveDependencies(true);
-		ArtifactRepository centralRepository = new MavenArtifactRepository();
-		centralRepository.setUrl("https://repo.maven.apache.org/maven2/");
-		centralRepository.setLayout(new DefaultRepositoryLayout());
-		request.setRemoteRepositories(Collections.singletonList(centralRepository));
+    ArtifactRepository centralRepository = new MavenArtifactRepository();
+    centralRepository.setUrl("https://repo.maven.apache.org/maven2/");
+    centralRepository.setLayout(new DefaultRepositoryLayout());
+    centralRepository.setSnapshotUpdatePolicy(new ArtifactRepositoryPolicy());
+    centralRepository.setReleaseUpdatePolicy(new ArtifactRepositoryPolicy());
+    ProjectBuildingRequest request = new DefaultProjectBuildingRequest()
+      .setRepositorySession(session)
+      .setResolveDependencies(true)
+      .setRemoteRepositories(Collections.singletonList(centralRepository))
+      .setSystemProperties(System.getProperties());
 
-    ProjectBuildingResult result = projectBuilder.build(new File("pom.xml"), request);
+    try {
+      ProjectBuildingResult result = projectBuilder.build(new File("pom.xml"), request);
 
-    result.getDependencyResolutionResult().getDependencies().forEach(dependency ->
-        System.out.println(
-            "Provided pom depends on: " +
-                dependency.getArtifact().getGroupId() +
-                ":" + dependency.getArtifact().getGroupId() +
-                ":" + dependency.getArtifact().getVersion()
-            )
-    );
+      result.getDependencyResolutionResult().getDependencies().forEach(dependency ->
+          System.out.println(
+              "Provided pom depends on: " +
+                  dependency.getArtifact().getGroupId() +
+                  ":" + dependency.getArtifact().getGroupId() +
+                  ":" + dependency.getArtifact().getVersion()
+              )
+      );
+    } catch (ProjectBuildingException pbe) {
+      for (ProjectBuildingResult pbr: pbe.getResults()) {
+        for (ModelProblem problem: pbr.getProblems()) {
+          problem.getException().printStackTrace();
+        }
+      }
+    }
 
   }
 
